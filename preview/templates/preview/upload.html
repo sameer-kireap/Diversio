@@ -1,0 +1,107 @@
+{% extends "preview/base.html" %}
+
+{% block title %}Upload HRIS Export - Diversio{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 680px; margin: 3rem auto;">
+    <h2 style="margin-bottom: 0.5rem; font-size: 1.5rem;">Upload HRIS Export File</h2>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        Select an HRIS CSV export file to analyze source rows, validate employee identities, resolve reporting hierarchies, and detect cycles.
+    </p>
+
+    {% if error %}
+    <div style="background: var(--danger-bg); color: var(--danger-color); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 1px solid #fca5a5;">
+        <strong>Import Processing Error:</strong> {{ error }}
+    </div>
+    {% endif %}
+
+    <form id="uploadForm" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2" style="margin-bottom: 1rem;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.25rem;">Click to select or drag & drop CSV file</h3>
+            <p style="font-size: 0.875rem; color: var(--text-muted);" id="fileNameDisplay">Supports UTF-8 encoded .csv files with standard headers</p>
+            <input type="file" id="fileInput" name="csv_file" accept=".csv" class="file-input" onchange="handleFileSelect(this.files)">
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                Analyze & Preview Import
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function handleFileSelect(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            fileNameDisplay.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+            submitBtn.disabled = false;
+        }
+    }
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--primary-color)';
+        dropZone.style.background = '#f4f4ff';
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border-color)';
+        dropZone.style.background = '#fafafa';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border-color)';
+        dropZone.style.background = '#fafafa';
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect(e.dataTransfer.files);
+        }
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!fileInput.files.length) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting task...';
+
+        const formData = new FormData();
+        formData.append('csv_file', fileInput.files[0]);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        try {
+            const response = await fetch('/submit/', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.success && data.redirect_url) {
+                window.location.href = data.redirect_url;
+            } else {
+                alert(data.error || 'Failed to dispatch task.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Analyze & Preview Import';
+            }
+        } catch (err) {
+            alert('Server error dispatching task: ' + err.message);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Analyze & Preview Import';
+        }
+    });
+</script>
+{% endblock %}

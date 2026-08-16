@@ -1,0 +1,468 @@
+{% extends "preview/base.html" %}
+
+{% block title %}HRIS Import Preview Dashboard - Diversio{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <div>
+        <h1 style="font-size: 1.875rem; font-weight: 800;">HRIS Import Preview Dashboard</h1>
+        <p style="color: var(--text-muted);">Click any metric card below to filter the detailed preview sections.</p>
+    </div>
+    <div>
+        <a href="{% url 'upload' %}" class="btn btn-primary">Upload Another CSV</a>
+    </div>
+</div>
+
+<!-- Key Metrics Summary Grid (Clickable Cards) -->
+<div class="grid-3">
+    <div class="metric-card accent-purple" id="card-total-rows" onclick="switchSection('sec-total-rows', 'card-total-rows')">
+        <span class="metric-label">Total Source Rows</span>
+        <span class="metric-value">{{ data.total_source_rows }}</span>
+    </div>
+    <div class="metric-card accent-green" id="card-accepted" onclick="switchSection('sec-accepted', 'card-accepted')">
+        <span class="metric-label">Accepted Employees</span>
+        <span class="metric-value">{{ data.accepted_employees|length }}</span>
+    </div>
+    <div class="metric-card accent-red" id="card-errors" onclick="switchSection('sec-errors', 'card-errors')">
+        <span class="metric-label">Validation Errors</span>
+        <span class="metric-value">{{ data.validation_errors|length }}</span>
+    </div>
+    <div class="metric-card accent-blue" id="card-roots" onclick="switchSection('sec-roots', 'card-roots')">
+        <span class="metric-label">Root Employees</span>
+        <span class="metric-value">{{ data.root_employees|length }}</span>
+    </div>
+    <div class="metric-card accent-purple" id="card-managers" onclick="switchSection('sec-managers', 'card-managers')">
+        <span class="metric-label">Active Managers</span>
+        <span class="metric-value">{{ data.manager_report_summaries|length }}</span>
+    </div>
+    <div class="metric-card accent-amber" id="card-cycles" onclick="switchSection('sec-cycles', 'card-cycles')">
+        <span class="metric-label">Reporting Cycle Members</span>
+        <span class="metric-value">{{ data.cycle_members|length }}</span>
+    </div>
+</div>
+
+<!-- View Mode Toggle Toolbar -->
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;">
+    <span style="font-weight: 600; font-size: 0.875rem; color: var(--text-muted); margin-right: 0.5rem;">Quick View Filter:</span>
+    <button type="button" class="tab-btn" id="btn-all" onclick="showAllSections()">Show All Sections</button>
+    <button type="button" class="tab-btn" id="btn-sec-total-rows" onclick="switchSection('sec-total-rows', 'card-total-rows')">Total Source Rows</button>
+    <button type="button" class="tab-btn" id="btn-sec-accepted" onclick="switchSection('sec-accepted', 'card-accepted')">Accepted Employees</button>
+    <button type="button" class="tab-btn" id="btn-sec-errors" onclick="switchSection('sec-errors', 'card-errors')">Validation Errors</button>
+    <button type="button" class="tab-btn" id="btn-sec-roots" onclick="switchSection('sec-roots', 'card-roots')">Root Employees</button>
+    <button type="button" class="tab-btn" id="btn-sec-managers" onclick="switchSection('sec-managers', 'card-managers')">Active Managers</button>
+    <button type="button" class="tab-btn" id="btn-sec-cycles" onclick="switchSection('sec-cycles', 'card-cycles')">Cycle Members</button>
+</div>
+
+<!-- Total Source Rows Summary & Paginated Table Section -->
+<div class="card detail-section" id="sec-total-rows">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+        <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--primary-color);">
+            Total Source Rows ({{ data.total_source_rows }})
+        </h3>
+        <div style="font-size: 0.875rem; color: var(--text-muted);" id="paginationInfo">
+            Showing Page 1 of 1 (50 per page)
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 2rem; margin-bottom: 1rem; background: #f8fafc; padding: 1rem; border-radius: var(--radius-md); flex-wrap: wrap;">
+        <div><strong>Total Source Rows:</strong> {{ data.total_source_rows }}</div>
+        <div><strong style="color: var(--success-color);">Accepted Employees:</strong> {{ data.accepted_employees|length }}</div>
+        <div><strong style="color: var(--danger-color);">Quarantined Rows:</strong> {{ data.identity_errors|length }}</div>
+        <div><strong style="color: var(--warning-color);">Manager Warnings:</strong> {{ data.manager_errors|length }}</div>
+    </div>
+
+    <!-- Top Pagination Controls (Above Table) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #ffffff; padding: 0.5rem 0;">
+        <button type="button" class="btn prev-btn-cls" style="border: 1px solid var(--border-color); background: #ffffff;" onclick="changeRawPage(-1)">
+            &larr; Previous Page
+        </button>
+        <div style="display: flex; gap: 0.25rem;" class="page-number-buttons-cls"></div>
+        <button type="button" class="btn next-btn-cls" style="border: 1px solid var(--border-color); background: #ffffff;" onclick="changeRawPage(1)">
+            Next Page &rarr;
+        </button>
+    </div>
+
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Row #</th>
+                    <th>Employee ID</th>
+                    <th>Employee Name</th>
+                    <th>Email</th>
+                    <th>Specified Manager ID</th>
+                    <th>Specified Manager Email</th>
+                    <th>Department</th>
+                </tr>
+            </thead>
+            <tbody id="rawRowsTableBody">
+                {% with raw_list=data.raw_records|default:data.accepted_employees %}
+                {% for record in raw_list %}
+                <tr class="raw-row-item" data-row-index="{{ forloop.counter0 }}">
+                    <td><span class="badge badge-success">Row {{ record.source_row_number }}</span></td>
+                    <td style="font-weight: 600;">{{ record.employee_id|default:"(blank)" }}</td>
+                    <td>{{ record.employee_name|default:"-" }}</td>
+                    <td>{{ record.email|default:"(blank)" }}</td>
+                    <td>{{ record.manager_id|default:"-" }}</td>
+                    <td>{{ record.manager_email|default:"-" }}</td>
+                    <td>{{ record.department|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+                {% endwith %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bottom Pagination Controls (Below Table) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem;">
+        <button type="button" class="btn prev-btn-cls" style="border: 1px solid var(--border-color); background: #ffffff;" onclick="changeRawPage(-1)">
+            &larr; Previous Page
+        </button>
+        <div style="display: flex; gap: 0.25rem;" class="page-number-buttons-cls"></div>
+        <button type="button" class="btn next-btn-cls" style="border: 1px solid var(--border-color); background: #ffffff;" onclick="changeRawPage(1)">
+            Next Page &rarr;
+        </button>
+    </div>
+</div>
+
+<!-- Accepted Employees Full Table Section -->
+<div class="card detail-section" id="sec-accepted">
+    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; color: var(--success-color);">
+        Accepted Employees Pool ({{ data.accepted_employees|length }})
+    </h3>
+
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Row #</th>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Specified Manager ID</th>
+                    <th>Specified Manager Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in data.accepted_employees %}
+                <tr>
+                    <td>Row {{ emp.source_row_number }}</td>
+                    <td style="font-weight: 600;">{{ emp.employee_id }}</td>
+                    <td>{{ emp.employee_name }}</td>
+                    <td>{{ emp.email }}</td>
+                    <td>{{ emp.department }}</td>
+                    <td>{{ emp.manager_id|default:"-" }}</td>
+                    <td>{{ emp.manager_email|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Validation Errors Section -->
+<div class="card detail-section" id="sec-errors">
+    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--danger-color); display: flex; align-items: center; gap: 0.5rem;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        Row-Level Validation Errors ({{ data.validation_errors|length }})
+    </h3>
+
+    {% if data.validation_errors %}
+    <!-- Split breakdown — only shown when there are actual errors -->
+    <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+        <span style="background: #fef2f2; color: var(--danger-color); border: 1px solid #fecaca; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 0.8125rem; font-weight: 600;">
+            {{ data.identity_errors|length }} Identity — row(s) quarantined
+        </span>
+        <span style="background: #fffbeb; color: var(--warning-color); border: 1px solid #fde68a; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 0.8125rem; font-weight: 600;">
+            {{ data.manager_errors|length }} Manager warning(s) — employee still accepted
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 100px;">Row #</th>
+                    <th style="width: 200px;">Error Category</th>
+                    <th>Failure Reason</th>
+                    <th>Raw Record Data</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for err in data.validation_errors %}
+                <tr>
+                    <td><span class="badge badge-danger">Row {{ err.source_row_number }}</span></td>
+                    <td style="font-weight: 600;">{{ err.error_type }}</td>
+                    <td>{{ err.message }}</td>
+                    <td style="font-family: monospace; font-size: 0.8125rem; color: var(--text-muted);">
+                        ID: {{ err.raw_record.employee_id|default:"(blank)" }} | Email: {{ err.raw_record.email|default:"(blank)" }} | MgrID: {{ err.raw_record.manager_id|default:"(blank)" }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color: var(--success-color); font-weight: 600;">No validation errors found in upload.</p>
+    {% endif %}
+</div>
+
+<!-- Root Employees Section -->
+<div class="card detail-section" id="sec-roots">
+    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; color: var(--accent-blue);">
+        Root Employees (No Manager Assigned) ({{ data.root_employees|length }})
+    </h3>
+
+    {% if data.root_employees %}
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Source Row</th>
+                    <th>Employee ID</th>
+                    <th>Employee Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in data.root_employees %}
+                <tr>
+                    <td>Row {{ emp.source_row_number }}</td>
+                    <td style="font-weight: 700;">{{ emp.employee_id }}</td>
+                    <td>{{ emp.employee_name }}</td>
+                    <td>{{ emp.email }}</td>
+                    <td>{{ emp.department }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color: var(--text-muted);">No root employees identified.</p>
+    {% endif %}
+</div>
+
+<!-- Managers & Direct Report Counts Section -->
+<div class="card detail-section" id="sec-managers">
+    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; color: var(--primary-color);">
+        Managers & Direct-Report Counts ({{ data.manager_report_summaries|length }})
+    </h3>
+
+    {% if data.manager_report_summaries %}
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Manager ID</th>
+                    <th>Manager Name</th>
+                    <th>Manager Email</th>
+                    <th>Accepted Direct Reports Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mgr in data.manager_report_summaries %}
+                <tr>
+                    <td style="font-weight: 700;">{{ mgr.manager_id }}</td>
+                    <td>{{ mgr.manager_name }}</td>
+                    <td>{{ mgr.manager_email }}</td>
+                    <td><span class="badge badge-success" style="font-size: 0.875rem;">{{ mgr.direct_report_count }} reports</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color: var(--text-muted);">No active management relationships resolved.</p>
+    {% endif %}
+</div>
+
+<!-- Reporting Cycles Section -->
+<div class="card detail-section" id="sec-cycles">
+    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; color: var(--warning-color); display: flex; align-items: center; gap: 0.5rem;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Employees Participating in a Reporting Cycle ({{ data.cycle_members|length }})
+    </h3>
+
+    {% if data.cycle_members %}
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Source Row</th>
+                    <th>Employee ID</th>
+                    <th>Employee Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Configured Manager ID / Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in data.cycle_members %}
+                <tr>
+                    <td>Row {{ emp.source_row_number }}</td>
+                    <td style="font-weight: 700;">{{ emp.employee_id }}</td>
+                    <td>{{ emp.employee_name }}</td>
+                    <td>{{ emp.email }}</td>
+                    <td>{{ emp.department }}</td>
+                    <td style="font-family: monospace;">{{ emp.manager_id|default:emp.manager_email }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color: var(--success-color); font-weight: 600;">No reporting cycles detected in organizational hierarchy.</p>
+    {% endif %}
+</div>
+
+<script>
+    const pageSize = 50;
+    let currentRawPage = 1;
+    const rawRowItems = document.querySelectorAll('.raw-row-item');
+    const totalRawRows = rawRowItems.length;
+    const totalRawPages = Math.ceil(totalRawRows / pageSize) || 1;
+
+    const sectionCardMap = {
+        'sec-total-rows': 'card-total-rows',
+        'sec-accepted': 'card-accepted',
+        'sec-errors': 'card-errors',
+        'sec-roots': 'card-roots',
+        'sec-managers': 'card-managers',
+        'sec-cycles': 'card-cycles'
+    };
+
+    function renderRawPage(page) {
+        currentRawPage = page;
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+
+        rawRowItems.forEach((row, idx) => {
+            if (idx >= startIndex && idx < endIndex) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update pagination info text
+        const displayStart = totalRawRows === 0 ? 0 : startIndex + 1;
+        const displayEnd = Math.min(endIndex, totalRawRows);
+        const paginationInfo = document.getElementById('paginationInfo');
+        if (paginationInfo) {
+            paginationInfo.textContent = `Showing rows ${displayStart}-${displayEnd} of ${totalRawRows} (Page ${currentRawPage} of ${totalRawPages})`;
+        }
+
+        // Enable/disable buttons (Top & Bottom)
+        document.querySelectorAll('.prev-btn-cls').forEach(btn => btn.disabled = (currentRawPage <= 1));
+        document.querySelectorAll('.next-btn-cls').forEach(btn => btn.disabled = (currentRawPage >= totalRawPages));
+
+        // Render page number buttons
+        renderPageButtons();
+    }
+
+    function changeRawPage(delta) {
+        const newPage = currentRawPage + delta;
+        if (newPage >= 1 && newPage <= totalRawPages) {
+            renderRawPage(newPage);
+        }
+    }
+
+    function renderPageButtons() {
+        const btnContainers = document.querySelectorAll('.page-number-buttons-cls');
+        btnContainers.forEach(container => {
+            container.innerHTML = '';
+            for (let p = 1; p <= totalRawPages; p++) {
+                if (p === 1 || p === totalRawPages || (p >= currentRawPage - 2 && p <= currentRawPage + 2)) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'tab-btn' + (p === currentRawPage ? ' active' : '');
+                    btn.style.padding = '0.375rem 0.75rem';
+                    btn.textContent = p;
+                    btn.onclick = () => renderRawPage(p);
+                    container.appendChild(btn);
+                }
+            }
+        });
+    }
+
+    function switchSection(targetSectionId, activeCardId) {
+        // Hide all detail sections
+        const sections = document.querySelectorAll('.detail-section');
+        sections.forEach(sec => sec.style.display = 'none');
+
+        // Remove active class from all metric cards & tab buttons
+        document.querySelectorAll('.metric-card').forEach(card => card.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+        // Show target section
+        const targetSec = document.getElementById(targetSectionId);
+        if (targetSec) {
+            targetSec.style.display = 'block';
+        }
+
+        // Highlight selected metric card
+        const activeCard = document.getElementById(activeCardId);
+        if (activeCard) {
+            activeCard.classList.add('active');
+        }
+
+        // Highlight matching tab button
+        const activeBtn = document.getElementById('btn-' + targetSectionId);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        }
+
+        // Save active tab in URL Hash & LocalStorage for seamless browser refresh
+        const cleanName = targetSectionId.replace('sec-', '');
+        history.replaceState(null, null, '#' + cleanName);
+        localStorage.setItem('hrisActiveTab', targetSectionId);
+    }
+
+    function showAllSections() {
+        const sections = document.querySelectorAll('.detail-section');
+        sections.forEach(sec => sec.style.display = 'block');
+
+        document.querySelectorAll('.metric-card').forEach(card => card.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+        const btnAll = document.getElementById('btn-all');
+        if (btnAll) btnAll.classList.add('active');
+
+        history.replaceState(null, null, '#all');
+        localStorage.setItem('hrisActiveTab', 'all');
+    }
+
+    function initActiveSection() {
+        const hash = window.location.hash.replace('#', '');
+        const hashSectionId = hash && hash !== 'all' ? 'sec-' + hash : null;
+        const savedSectionId = localStorage.getItem('hrisActiveTab');
+
+        if (hash === 'all') {
+            showAllSections();
+            return;
+        }
+
+        let targetSection = 'sec-total-rows';
+        if (hashSectionId && document.getElementById(hashSectionId)) {
+            targetSection = hashSectionId;
+        } else if (savedSectionId && savedSectionId !== 'all' && document.getElementById(savedSectionId)) {
+            targetSection = savedSectionId;
+        }
+
+        const targetCard = sectionCardMap[targetSection] || 'card-total-rows';
+        switchSection(targetSection, targetCard);
+    }
+
+    // Initialize raw rows pagination and restore active tab on refresh
+    renderRawPage(1);
+    initActiveSection();
+</script>
+{% endblock %}
