@@ -37,3 +37,4 @@ media/
 .pytest_cache/
 .coverage
 htmlcov/
+dump.rdb

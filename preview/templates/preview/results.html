@@ -173,17 +173,14 @@
     </h3>
 
     {% if data.validation_errors %}
-    <!-- Split breakdown — only shown when there are actual errors -->
+    <!-- Split breakdown pills — counts computed by JS from table rows so they
+         are always correct regardless of the result dict format in cache. -->
     <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
-        <span style="background: #fef2f2; color: var(--danger-color); border: 1px solid #fecaca; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 0.8125rem; font-weight: 600;">
-            {{ data.identity_errors|length }} Identity — row(s) quarantined
-        </span>
-        <span style="background: #fffbeb; color: var(--warning-color); border: 1px solid #fde68a; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 0.8125rem; font-weight: 600;">
-            {{ data.manager_errors|length }} Manager warning(s) — employee still accepted
-        </span>
+        <span id="pill-identity" style="background: #fef2f2; color: var(--danger-color); border: 1px solid #fecaca; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 0.8125rem; font-weight: 600;">…</span>
+        <span id="pill-manager" style="background: #fffbeb; color: var(--warning-color); border: 1px solid #fde68a; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 0.8125rem; font-weight: 600;">…</span>
     </div>
     <div class="table-responsive">
-        <table>
+        <table id="errors-table">
             <thead>
                 <tr>
                     <th style="width: 100px;">Row #</th>
@@ -194,7 +191,7 @@
             </thead>
             <tbody>
                 {% for err in data.validation_errors %}
-                <tr>
+                <tr data-error-type="{{ err.error_type }}">
                     <td><span class="badge badge-danger">Row {{ err.source_row_number }}</span></td>
                     <td style="font-weight: 600;">{{ err.error_type }}</td>
                     <td>{{ err.message }}</td>
@@ -464,5 +461,26 @@
     // Initialize raw rows pagination and restore active tab on refresh
     renderRawPage(1);
     initActiveSection();
+
+    // Compute identity vs manager error counts from rendered table rows.
+    // This is derived from data-error-type attributes so it is always correct
+    // regardless of which version of the result dict is in cache.
+    (function computeErrorPills() {
+        const pillIdentity = document.getElementById('pill-identity');
+        const pillManager  = document.getElementById('pill-manager');
+        if (!pillIdentity || !pillManager) return;
+
+        const rows = document.querySelectorAll('#errors-table tbody tr[data-error-type]');
+        let identityCount = 0;
+        let managerCount  = 0;
+        rows.forEach(function(row) {
+            const t = row.getAttribute('data-error-type');
+            if (t === 'Identity Validation Error') identityCount++;
+            else if (t === 'Manager Resolution Error') managerCount++;
+        });
+        pillIdentity.textContent = identityCount + ' Identity — row(s) quarantined';
+        pillManager.textContent  = managerCount  + ' Manager warning(s) — employee still accepted';
+    })();
+
 </script>
 {% endblock %}

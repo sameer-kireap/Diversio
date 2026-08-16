@@ -1,4 +1,5 @@
 import base64
+import uuid
 from celery import shared_task
 from django.core.cache import cache
 
@@ -10,7 +11,7 @@ from .domain.validator import validate_identities
 @shared_task(bind=True)
 def process_hris_csv_task(self, file_content_b64: str) -> dict:
 
-    task_id = self.request.id or "sync-eager-task"
+    task_id = self.request.id or str(uuid.uuid4())
 
     try:
         file_content_bytes = base64.b64decode(file_content_b64.encode("utf-8"))
