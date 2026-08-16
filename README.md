@@ -117,7 +117,10 @@ pytest
 ## Time Spent & AI Tool Usage Log
 
 - **Approximate Time Spent:** ~80 minutes total (Architecture planning, Celery task configuration, domain module separation, graph algorithm implementation, UI templates, unit tests).
+- **AI Tools Used:** [Antigravity](https://antigravity.dev) (Google DeepMind agentic coding assistant) was used for code generation, review, and debugging.
 - **AI Tool Usage Reflection:**
-  - **Accepted:** Domain separation into pure Python dataclasses (`RawRecord`, `Employee`, `ValidationError`, `ImportPreviewResult`) completely decoupled from Django ORM.
-  - **Changed:** Celery Task eager fallback strategy (`CELERY_TASK_ALWAYS_EAGER = True`) during automated testing so test suites run deterministically without requiring a live Redis daemon.
-  - **Rejected:** Initially considered building an asynchronous SPA frontend with React/Vue; rejected in favour of server-side Django templates with native JS polling to strictly respect the timebox and keep the solution simple and robust.
+  - **Accepted:** Domain separation into pure Python dataclasses (`RawRecord`, `Employee`, `ValidationError`, `ImportPreviewResult`) completely decoupled from Django ORM — Antigravity suggested this pattern and it was adopted as-is.
+  - **Accepted:** Antigravity identified a dead-code bug in the cycle-detection function (`hierarchy.py`) where a list comprehension used a leaked loop variable instead of the iteration variable — a subtle mistake that would have crashed if the rescue line below it were removed.
+  - **Changed:** Celery Task eager fallback strategy (`CELERY_TASK_ALWAYS_EAGER = True`) during automated testing — Antigravity proposed this but the key name in the environment variable mapping was adjusted to match Django's Celery settings convention.
+  - **Changed:** Antigravity suggested using `LocMemCache` for the result cache; this was changed to `django-redis` (RedisCache) after Antigravity itself flagged that `LocMemCache` is per-process and invisible to a separate Celery worker — a real deployment bug in a multi-process setup.
+  - **Rejected:** Initially suggested building an asynchronous SPA frontend with React/Vue; rejected in favour of server-side Django templates with native JS polling to strictly respect the timebox and keep the solution simple and reliable.
